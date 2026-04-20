@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ user.last_name }} {{ user.first_name }} — WebOnlineMonitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex align-items-center gap-3">
+        <a href="{{ url_for('watched_users_list') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <div>
+            <h1 class="mb-0">
+                {{ user.last_name }} {{ user.first_name or '—' }}
+            </h1>
+            <span class="text-muted small">#{{ user.vk_id }}</span>
+        </div>
+    </div>
+    <a href="{{ url_for('export_csv', vk_id=user.vk_id) }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-download me-1"></i>CSV
+    </a>
+</div>
+
+<!-- Стат-карточки -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-activity"></i></div>
+            <div>
+                <div class="value text-primary">{{ total }}</div>
+                <div class="label">Всего событий</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="icon bg-success bg-opacity-10 text-success"><i class="bi bi-phone"></i></div>
+            <div>
+                <div class="value text-success">
+                    {% set mobile = platforms | selectattr('name', 'in', ['a_iPhone','a_iPad','a_andr','a_WinPhon','mob_site']) | map(attribute='cnt') | sum %}
+                    {{ mobile }}
+                </div>
+                <div class="label">С мобильного</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-display"></i></div>
+            <div>
+                <div class="value text-warning">
+                    {% set desktop = platforms | selectattr('name', 'in', ['site','a_Win10']) | map(attribute='cnt') | sum %}
+                    {{ desktop }}
+                </div>
+                <div class="label">С компьютера</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Графики -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header py-3">
+                <i class="bi bi-bar-chart-line me-2 text-primary"></i>Активность за последние 30 дней
+            </div>
+            <div class="card-body">
+                <canvas id="daysChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header py-3">
+                <i class="bi bi-clock me-2 text-primary"></i>По часам суток
+            </div>
+            <div class="card-body">
+                <canvas id="hourChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Последние события -->
+<div class="card">
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul me-2 text-primary"></i>Последние 100 событий</span>
+    </div>
+    <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+        <table class="table mb-0 table-sm">
+            <thead style="position:sticky;top:0;z-index:1">
+                <tr>
+                    <th>Дата</th>
+                    <th>Время</th>
+                    <th>Платформа</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in events %}
+                <tr>
+                    <td>{{ e.seen_time.strftime('%d.%m.%Y') }}</td>
+                    <td>{{ e.seen_time.strftime('%H:%M:%S') }}</td>
+                    <td>
+                        {% if e.platform in ('none', 'unknown', '') or not e.platform %}
+                            <span class="text-muted">—</span>
+                        {% elif 'andr' in e.platform or 'iPhone' in e.platform or 'iPad' in e.platform or 'WinPhon' in e.platform or e.platform == 'mob_site' %}
+                            <span class="badge bg-success bg-opacity-10 text-success">
+                                <i class="bi bi-phone me-1"></i>{{ e.platform }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary">
+                                <i class="bi bi-display me-1"></i>{{ e.platform }}
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const BLUE   = 'rgba(74,144,217,0.85)';
+const BLUE_L = 'rgba(74,144,217,0.15)';
+Chart.defaults.font.family = "'Segoe UI', sans-serif";
+
+new Chart(document.getElementById('daysChart'), {
+    type: 'line',
+    data: {
+        labels: {{ days_labels | tojson }},
+        datasets: [{ data: {{ days_data | tojson }}, borderColor: BLUE, backgroundColor: BLUE_L, fill: true, tension: 0.4, pointRadius: 3 }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+});
+
+new Chart(document.getElementById('hourChart'), {
+    type: 'bar',
+    data: {
+        labels: Array.from({length:24}, (_,i) => i + ':00'),
+        datasets: [{ data: {{ by_hour | tojson }}, backgroundColor: BLUE, borderRadius: 3 }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true }, y: { grid: { display: false } } } }
+});
+</script>
+{% endblock %}

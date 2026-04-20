@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Временная линия — WebOnlineMonitor{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+.chart-wrap { position: relative; width: 100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Временная линия</h1>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-600">ДАТА С</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-calendar3 text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0 datepicker" id="date_from"
+                           name="date_from" value="{{ date_from }}" placeholder="дд.мм.гггг">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-600">ДАТА ПО</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-calendar3 text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0 datepicker" id="date_to"
+                           name="date_to" value="{{ date_to }}" placeholder="дд.мм.гггг">
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label text-muted small fw-600">ПОЛЬЗОВАТЕЛИ</label>
+                <div class="dropdown">
+                    <button class="btn btn-white border dropdown-toggle w-100 text-start" type="button"
+                            id="usersDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-people me-1 text-muted"></i>
+                        {% if vk_id_filters %}Выбрано: {{ vk_id_filters|length }}{% else %}Все пользователи{% endif %}
+                    </button>
+                    <ul class="dropdown-menu shadow-sm" style="max-height:280px;overflow-y:auto;width:100%;padding:.5rem">
+                        <li class="px-1 mb-1">
+                            <input type="text" class="form-control form-control-sm search-input" placeholder="Поиск...">
+                        </li>
+                        {% for user in watched_users %}
+                        <li>
+                            <div class="form-check px-3 py-1">
+                                <input class="form-check-input user-checkbox" type="checkbox"
+                                       id="u{{ user.vk_id }}" name="vk_ids[]" value="{{ user.vk_id }}"
+                                       {% if user.vk_id|string in vk_id_filters %}checked{% endif %}>
+                                <label class="form-check-label w-100" for="u{{ user.vk_id }}">
+                                    {{ (user.last_name ~ ' ' ~ user.first_name).strip() or user.vk_id }}
+                                </label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-funnel me-1"></i>Применить
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- График -->
+<div class="card">
+    <div class="card-body p-3">
+        <div id="noData" class="text-center text-muted py-5" style="display:none">
+            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+            Нет данных за выбранный период
+        </div>
+        <div class="chart-wrap" id="chartWrap">
+            <canvas id="timelineChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+const rawEvents  = {{ events_json | safe }};
+const userList   = {{ users_json | safe }};
+const colorMap   = {{ color_map_json | safe }};
+
+const DEFAULT_COLORS = [
+    '#4a90d9','#e74c3c','#2ecc71','#f39c12','#9b59b6',
+    '#1abc9c','#e67e22','#3498db','#e91e63','#00bcd4'
+];
+
+if (!userList.length || !rawEvents.length) {
+    document.getElementById('noData').style.display = '';
+    document.getElementById('chartWrap').style.display = 'none';
+} else {
+    // Группируем события по пользователю
+    const byUser = {};
+    rawEvents.forEach(e => {
+        if (!byUser[e.vk_id]) byUser[e.vk_id] = [];
+        byUser[e.vk_id].push(e);
+    });
+
+    const datasets = userList.map((user, idx) => {
+        const events = byUser[user.vk_id] || [];
+        const color  = colorMap[String(user.vk_id)] || DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
+        const label  = [user.last_name, user.first_name].filter(Boolean).join(' ') || `id${user.vk_id}`;
+        return {
+            label,
+            data: events.map(e => ({ x: e.ts, y: idx + 0.5, platform: e.platform, time_str: e.time_str })),
+            backgroundColor: color,
+            borderColor: color,
+            pointRadius: 7,
+            pointHoverRadius: 10,
+            showLine: false,
+            _color: color,
+        };
+    }).filter(d => d.data.length > 0);
+
+    // Высота: минимум 300px, 60px на пользователя
+    const chartH = Math.max(300, userList.length * 60 + 60);
+    document.getElementById('timelineChart').style.height = chartH + 'px';
+
+    const ctx = document.getElementById('timelineChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour:   'dd.MM HH:mm',
+                            day:    'dd.MM',
+                        },
+                        tooltipFormat: 'dd.MM.yyyy HH:mm:ss',
+                    },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    title: { display: true, text: 'Время', color: '#888', font: { size: 12 } },
+                },
+                y: {
+                    min: 0,
+                    max: userList.length,
+                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(val) {
+                            const idx = Math.floor(val);
+                            if (idx >= 0 && idx < userList.length && Math.abs(val - idx - 0.5) < 0.01) {
+                                const u = userList[idx];
+                                return [u.last_name, u.first_name].filter(Boolean).join(' ') || `id${u.vk_id}`;
+                            }
+                            return '';
+                        },
+                        color: '#555',
+                        font: { size: 12 },
+                    },
+                },
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: ctx => ctx[0].raw.time_str,
+                        label: ctx => {
+                            const plat = ctx.raw.platform;
+                            return ctx.dataset.label + (plat && plat !== 'none' ? ' · ' + plat : '');
+                        },
+                    },
+                    backgroundColor: '#1a1d23',
+                    titleColor: '#fff',
+                    bodyColor: '#aaa',
+                    padding: 10,
+                    cornerRadius: 8,
+                },
+            },
+        },
+    });
+}
+
+// Flatpickr
+flatpickr('#date_from', { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
+flatpickr('#date_to',   { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
+
+// Поиск в дропдауне
+document.querySelector('.search-input').addEventListener('input', function() {
+    const term = this.value.toLowerCase();
+    document.querySelectorAll('.dropdown-menu .form-check').forEach(item => {
+        item.style.display = item.querySelector('label').textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+});
+
+const btn = document.getElementById('usersDropdown');
+function updateBtn() {
+    const n = document.querySelectorAll('.user-checkbox:checked').length;
+    btn.innerHTML = `<i class="bi bi-people me-1 text-muted"></i>${n ? 'Выбрано: ' + n : 'Все пользователи'}`;
+}
+document.querySelectorAll('.user-checkbox').forEach(cb => cb.addEventListener('change', updateBtn));
+document.querySelector('.dropdown-menu').addEventListener('click', e => e.stopPropagation());
+</script>
+{% endblock %}

@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Отслеживаемые — WebOnlineMonitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people-fill me-2 text-primary"></i>Отслеживаемые</h1>
+    <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#addUserModal">
+        <i class="bi bi-plus-lg me-1"></i>Добавить
+    </button>
+</div>
+
+<!-- Стат-карточки -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-people-fill"></i></div>
+            <div>
+                <div class="value text-primary">{{ users|length }}</div>
+                <div class="label">Всего пользователей</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="icon bg-success bg-opacity-10 text-success"><i class="bi bi-broadcast"></i></div>
+            <div>
+                <div class="value text-success">{{ users|selectattr('user_type', 'ne', 0)|list|length }}</div>
+                <div class="label">Активно отслеживается</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-clock-history"></i></div>
+            <div>
+                <div class="value text-warning">{{ global_idle }}с</div>
+                <div class="label">Глобальный idle</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Поиск -->
+<div class="mb-3">
+    <div class="input-group" style="max-width:340px">
+        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" id="userSearch" class="form-control border-start-0 ps-0"
+               placeholder="Поиск по имени или ID...">
+    </div>
+</div>
+
+<!-- Таблица -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table mb-0" id="usersTable">
+            <thead>
+                <tr>
+                    <th data-sort="name" style="cursor:pointer;user-select:none">
+                        Пользователь <i class="bi bi-chevron-expand opacity-25 ms-1 sort-icon"></i>
+                    </th>
+                    <th>Цвет</th>
+                    <th data-sort="type" style="cursor:pointer;user-select:none">
+                        Тип <i class="bi bi-chevron-expand opacity-25 ms-1 sort-icon"></i>
+                    </th>
+                    <th>Интервал</th>
+                    <th data-sort="events" style="cursor:pointer;user-select:none">
+                        Событий <i class="bi bi-chevron-expand opacity-25 ms-1 sort-icon"></i>
+                    </th>
+                    <th data-sort="lastseen" style="cursor:pointer;user-select:none">
+                        Последний онлайн <i class="bi bi-chevron-expand opacity-25 ms-1 sort-icon"></i>
+                    </th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                {% set ucolor = color_map.get(user.vk_id) %}
+                <tr data-user="1"
+                    data-name="{{ (user.last_name ~ ' ' ~ user.first_name).strip().lower() }} {{ user.vk_id }}"
+                    data-type="{{ user.user_type }}"
+                    data-events="{{ user.event_count }}"
+                    data-lastseen="{{ user.last_seen.strftime('%Y%m%d%H%M%S') if user.last_seen else '0' }}"
+                    style="{% if ucolor %}border-left: 4px solid {{ ucolor }}{% endif %}">
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center"
+                                 style="width:36px;height:36px;flex-shrink:0;background:{{ ucolor ~ '22' if ucolor else 'rgba(74,144,217,0.1)' }}">
+                                <i class="bi bi-person" style="color:{{ ucolor or '#4a90d9' }}"></i>
+                            </div>
+                            <div>
+                                <div class="fw-500">
+                                    {% if user.last_name or user.first_name %}
+                                        {{ user.last_name }} {{ user.first_name }}
+                                    {% else %}
+                                        <span class="text-muted">Нет имени</span>
+                                    {% endif %}
+                                </div>
+                                <span class="text-muted small">#{{ user.vk_id }}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <form method="post" action="{{ url_for('set_user_color', vk_id=user.vk_id) }}">
+                                <input type="color" name="color" value="{{ ucolor or '#4a90d9' }}"
+                                       class="form-control form-control-color border-0 p-0"
+                                       style="width:30px;height:30px;cursor:pointer"
+                                       onchange="this.form.submit()" title="Выбрать цвет">
+                            </form>
+                            {% if ucolor %}
+                            <form method="post" action="{{ url_for('set_user_color', vk_id=user.vk_id) }}">
+                                <input type="hidden" name="color" value="">
+                                <button type="submit" class="btn btn-sm btn-link text-muted p-0" title="Сбросить цвет">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <form method="post" action="{{ url_for('change_user_type', vk_id=user.vk_id) }}" class="d-flex gap-1">
+                            <select name="user_type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+                                <option value="0" {% if user.user_type == 0 %}selected{% endif %}>Не отслеживать</option>
+                                {% for t in tracked_types %}
+                                <option value="{{ t }}" {% if user.user_type == t %}selected{% endif %}>Тип {{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        {% set iv = current_interval(user.user_type) %}
+                        {% if iv is none %}
+                            <span class="badge bg-secondary">—</span>
+                        {% elif iv <= 30 %}
+                            <span class="badge bg-success">{{ iv }}с</span>
+                        {% elif iv <= 60 %}
+                            <span class="badge bg-primary">{{ iv }}с</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">{{ iv }}с</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="text-muted">{{ user.event_count }}</span>
+                    </td>
+                    <td>
+                        {% if user.last_seen %}
+                            <div>{{ user.last_seen.strftime('%d.%m.%Y') }}</div>
+                            <div class="text-muted small">{{ user.last_seen.strftime('%H:%M:%S') }}</div>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="{{ url_for('user_detail', vk_id=user.vk_id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-graph-up"></i>
+                            </a>
+                            <form method="post" action="{{ url_for('delete_user', vk_id=user.vk_id) }}"
+                                  onsubmit="return confirm('Удалить пользователя {{ user.vk_id }}?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                        Нет пользователей
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модальное окно -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-600">Добавить пользователя</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('add_user') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-600">ID пользователя</label>
+                        <input type="number" name="vk_id" class="form-control" placeholder="123456789" required>
+                        <div class="form-text">Числовой ID пользователя</div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label text-muted small fw-600">Тип отслеживания</label>
+                        <select name="user_type" class="form-select">
+                            <option value="0">0 — не отслеживать</option>
+                            {% for t in tracked_types %}
+                            <option value="{{ t }}">Тип {{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4">Добавить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Поиск
+document.getElementById('userSearch').addEventListener('input', function () {
+    const term = this.value.toLowerCase();
+    document.querySelectorAll('tr[data-user]').forEach(row => {
+        row.style.display = row.dataset.name.includes(term) ? '' : 'none';
+    });
+});
+
+// Сортировка
+let sortCol = null, sortDir = 1;
+document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', function () {
+        const col = this.dataset.sort;
+        if (sortCol === col) sortDir *= -1;
+        else { sortCol = col; sortDir = 1; }
+
+        const tbody = document.querySelector('#usersTable tbody');
+        const rows  = [...tbody.querySelectorAll('tr[data-user]')];
+        rows.sort((a, b) => {
+            let av = a.dataset[col] || '', bv = b.dataset[col] || '';
+            return isNaN(av) || isNaN(bv)
+                ? av.localeCompare(bv, 'ru') * sortDir
+                : (Number(av) - Number(bv)) * sortDir;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+
+        document.querySelectorAll('th[data-sort] .sort-icon').forEach(ic => {
+            ic.className = 'sort-icon bi bi-chevron-expand opacity-25 ms-1';
+        });
+        this.querySelector('.sort-icon').className =
+            'sort-icon bi ms-1 ' + (sortDir === 1 ? 'bi-sort-down' : 'bi-sort-up');
+    });
+});
+</script>
+{% endblock %}

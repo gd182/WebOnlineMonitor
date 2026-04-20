@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Интервалы — WebOnlineMonitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-sliders me-2 text-primary"></i>Интервалы опроса</h1>
+    <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#addModal">
+        <i class="bi bi-plus-lg me-1"></i>Добавить правило
+    </button>
+</div>
+
+<div class="alert alert-light border mb-4" style="font-size:.875rem">
+    <i class="bi bi-info-circle text-primary me-2"></i>
+    <strong>Тип 0</strong> — не отслеживается, правила не нужны.
+    <strong>Idle</strong> — секунды с момента последнего события среди всех пользователей.
+    При совпадении диапазона <em>idle_from ≤ idle &lt; idle_to</em> используется заданный интервал.
+</div>
+
+{% if groups %}
+    {% for user_type, rules in groups.items() %}
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center gap-2 py-3">
+            <span class="badge bg-primary rounded-pill px-3" style="font-size:.85rem">Тип {{ user_type }}</span>
+            <span class="text-muted small">{{ rules|length }} правил{{ 'о' if rules|length == 1 else 'а' if rules|length in [2,3,4] else '' }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Idle от (сек)</th>
+                        <th>Idle до (сек)</th>
+                        <th>Интервал (сек)</th>
+                        <th style="width:160px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr id="row-{{ rule.id }}">
+                        <td class="view-{{ rule.id }}">
+                            <span class="badge bg-light text-dark border">{{ rule.idle_from }}с</span>
+                        </td>
+                        <td class="view-{{ rule.id }}">
+                            <span class="badge bg-light text-dark border">{{ rule.idle_to ~ 'с' if rule.idle_to is not none else '∞' }}</span>
+                        </td>
+                        <td class="view-{{ rule.id }}">
+                            {% if rule.interval <= 30 %}
+                                <span class="badge bg-success">{{ rule.interval }}с</span>
+                            {% elif rule.interval <= 60 %}
+                                <span class="badge bg-primary">{{ rule.interval }}с</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">{{ rule.interval }}с</span>
+                            {% endif %}
+                        </td>
+
+                        <td colspan="3" class="edit-{{ rule.id }}" style="display:none">
+                            <form method="post" action="{{ url_for('edit_interval', row_id=rule.id) }}"
+                                  class="d-flex gap-2 align-items-center flex-wrap">
+                                <input type="number" name="idle_from" value="{{ rule.idle_from }}"
+                                       class="form-control form-control-sm" style="width:85px" placeholder="от" required>
+                                <input type="number" name="idle_to" value="{{ rule.idle_to or '' }}"
+                                       class="form-control form-control-sm" style="width:85px" placeholder="∞">
+                                <input type="number" name="interval" value="{{ rule.interval }}"
+                                       class="form-control form-control-sm" style="width:85px" placeholder="сек" required>
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light"
+                                        onclick="toggleEdit({{ rule.id }}, false)">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </form>
+                        </td>
+
+                        <td class="view-{{ rule.id }} text-end">
+                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                    onclick="toggleEdit({{ rule.id }}, true)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="post" action="{{ url_for('delete_interval', row_id=rule.id) }}"
+                                  class="d-inline" onsubmit="return confirm('Удалить правило?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-sliders fs-2 d-block mb-2"></i>
+        Правил нет. Добавьте хотя бы одно для типов ≥ 1.
+    </div>
+</div>
+{% endif %}
+
+<!-- Модальное окно -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-600">Новое правило</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('add_interval') }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-600">ТИП (≥ 1)</label>
+                            <input type="number" name="user_type" min="1" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-600">ИНТЕРВАЛ (СЕК)</label>
+                            <input type="number" name="interval" min="1" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-600">IDLE ОТ (СЕК)</label>
+                            <input type="number" name="idle_from" value="0" min="0" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text-muted small fw-600">IDLE ДО (СЕК, ПУСТО = ∞)</label>
+                            <input type="number" name="idle_to" min="1" class="form-control" placeholder="∞">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4">Добавить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEdit(id, show) {
+    document.querySelectorAll('.view-' + id).forEach(el => el.style.display = show ? 'none' : '');
+    document.querySelectorAll('.edit-' + id).forEach(el => el.style.display = show ? '' : 'none');
+}
+</script>
+{% endblock %}

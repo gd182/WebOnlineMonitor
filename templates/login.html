@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — WebOnlineMonitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #1a1d23;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .login-box {
+            background: #fff;
+            border-radius: 16px;
+            padding: 2.5rem;
+            width: 100%; max-width: 380px;
+            box-shadow: 0 20px 60px rgba(0,0,0,.4);
+        }
+        .login-logo {
+            text-align: center; margin-bottom: 1.5rem;
+        }
+        .login-logo i {
+            font-size: 2.5rem; color: #4a90d9;
+        }
+        .login-logo h1 {
+            font-size: 1.4rem; font-weight: 700;
+            color: #1a1d23; margin: .5rem 0 0;
+        }
+        .login-logo p { color: #888; font-size: .85rem; margin: 0; }
+        .form-control {
+            border-radius: 8px; padding: .65rem .9rem;
+            border-color: #e0e0e0; font-size: .9rem;
+        }
+        .form-control:focus { border-color: #4a90d9; box-shadow: 0 0 0 3px rgba(74,144,217,.15); }
+        .btn-login {
+            background: #4a90d9; border: none; color: #fff;
+            border-radius: 8px; padding: .7rem;
+            font-weight: 600; width: 100%; font-size: .95rem;
+            transition: background .15s;
+        }
+        .btn-login:hover { background: #3a7bc8; color: #fff; }
+        .alert { border-radius: 8px; font-size: .85rem; }
+    </style>
+</head>
+<body>
+<div class="login-box">
+    <div class="login-logo">
+        <i class="bi bi-eye-fill"></i>
+        <h1>WebOnlineMonitor</h1>
+        <p>Мониторинг активности</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+        <div class="mb-3">
+            <label class="form-label fw-500 text-muted small">ЛОГИН</label>
+            <input type="text" class="form-control" name="username" autofocus required>
+        </div>
+        <div class="mb-4">
+            <label class="form-label fw-500 text-muted small">ПАРОЛЬ</label>
+            <input type="password" class="form-control" name="password" required>
+        </div>
+        <button type="submit" class="btn-login">Войти</button>
+    </form>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

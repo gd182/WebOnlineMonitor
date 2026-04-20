@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Активность — WebOnlineMonitor{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-activity me-2 text-primary"></i>Активность</h1>
+    <a href="{{ url_for('export_csv', date_from=date_from, date_to=date_to) }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-download me-1"></i>Экспорт CSV
+    </a>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-600">ДАТА С</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-calendar3 text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0 datepicker" id="date_from"
+                           name="date_from" value="{{ date_from }}" placeholder="дд.мм.гггг">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-600">ДАТА ПО</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-calendar3 text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0 ps-0 datepicker" id="date_to"
+                           name="date_to" value="{{ date_to }}" placeholder="дд.мм.гггг">
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label text-muted small fw-600">ПОЛЬЗОВАТЕЛИ</label>
+                <div class="dropdown">
+                    <button class="btn btn-white border dropdown-toggle w-100 text-start" type="button"
+                            id="usersDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-people me-1 text-muted"></i>
+                        {% if vk_id_filters %}Выбрано: {{ vk_id_filters|length }}{% else %}Все пользователи{% endif %}
+                    </button>
+                    <ul class="dropdown-menu shadow-sm" style="max-height:280px;overflow-y:auto;width:100%;padding:.5rem">
+                        <li class="px-1 mb-1">
+                            <input type="text" class="form-control form-control-sm search-input" placeholder="Поиск...">
+                        </li>
+                        {% for user in watched_users %}
+                        <li>
+                            <div class="form-check px-3 py-1">
+                                <input class="form-check-input user-checkbox" type="checkbox"
+                                       id="u{{ user.vk_id }}" name="vk_ids[]" value="{{ user.vk_id }}"
+                                       {% if user.vk_id|string in vk_id_filters %}checked{% endif %}>
+                                <label class="form-check-label w-100" for="u{{ user.vk_id }}">
+                                    {{ (user.last_name ~ ' ' ~ user.first_name).strip() or user.vk_id }}
+                                </label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-funnel me-1"></i>Применить
+                </button>
+                <a href="{{ url_for('show_logs', reset=1) }}" class="btn btn-outline-secondary" title="Сбросить фильтры">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Пользователь</th>
+                    <th>Дата и время</th>
+                    <th>Платформа</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                {% set color = color_map.get(entry.vk_id) %}
+                <tr style="{% if color %}border-left: 4px solid {{ color }}{% endif %}">
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if color %}
+                            <div class="rounded-circle d-flex align-items-center justify-content-center"
+                                 style="width:8px;height:8px;background:{{ color }};flex-shrink:0"></div>
+                            {% endif %}
+                            <div>
+                                <div class="fw-500">{{ entry.last_name }} {{ entry.first_name }}</div>
+                                <div class="text-muted small">id{{ entry.vk_id }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div>{{ entry.seen_time.strftime('%d.%m.%Y') }}</div>
+                        <div class="text-muted small">{{ entry.seen_time.strftime('%H:%M:%S') }}</div>
+                    </td>
+                    <td>
+                        {% if entry.platform == 'none' or not entry.platform %}
+                            <span class="text-muted">—</span>
+                        {% elif 'andr' in entry.platform or 'iPhone' in entry.platform or 'iPad' in entry.platform or 'WinPhon' in entry.platform %}
+                            <span class="badge bg-success bg-opacity-10 text-success">
+                                <i class="bi bi-phone me-1"></i>{{ entry.platform }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary">
+                                <i class="bi bi-display me-1"></i>{{ entry.platform }}
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                        Нет данных за выбранный период
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    flatpickr('#date_from', { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
+    flatpickr('#date_to',   { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
+
+    document.querySelector('.search-input').addEventListener('input', function () {
+        const term = this.value.toLowerCase();
+        document.querySelectorAll('.dropdown-menu .form-check').forEach(item => {
+            item.style.display = item.querySelector('label').textContent.toLowerCase().includes(term) ? '' : 'none';
+        });
+    });
+
+    const btn = document.getElementById('usersDropdown');
+    function updateBtn() {
+        const n = document.querySelectorAll('.user-checkbox:checked').length;
+        btn.innerHTML = `<i class="bi bi-people me-1 text-muted"></i>${n ? 'Выбрано: ' + n : 'Все пользователи'}`;
+    }
+    document.querySelectorAll('.user-checkbox').forEach(cb => cb.addEventListener('change', updateBtn));
+    document.querySelector('.dropdown-menu').addEventListener('click', e => e.stopPropagation());
+});
+</script>
+{% endblock %}

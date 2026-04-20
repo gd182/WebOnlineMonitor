@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — WebOnlineMonitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-shield-lock me-2 text-primary"></i>Пользователи системы</h1>
+    <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#addModal">
+        <i class="bi bi-plus-lg me-1"></i>Добавить
+    </button>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Логин</th>
+                    <th>Имя</th>
+                    <th>Роль</th>
+                    <th>Создан</th>
+                    <th style="width:220px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td class="fw-500">
+                        {{ u.username }}
+                        {% if u.username == session['username'] %}
+                        <span class="badge bg-secondary ms-1">вы</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ u.name }}</td>
+                    <td>
+                        {% if u.is_admin %}
+                        <span class="badge bg-danger">Администратор</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Пользователь</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ u.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>
+                        <div class="d-flex gap-1 justify-content-end">
+                            <!-- Смена пароля -->
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    data-bs-toggle="modal" data-bs-target="#pwdModal{{ u.id }}"
+                                    title="Сменить пароль">
+                                <i class="bi bi-key"></i>
+                            </button>
+
+                            <!-- Права -->
+                            {% if u.username != session['username'] %}
+                            <form method="post" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}">
+                                <button type="submit" class="btn btn-sm btn-outline-warning"
+                                        title="{{ 'Снять права' if u.is_admin else 'Сделать админом' }}">
+                                    <i class="bi bi-shield{{ '-fill' if u.is_admin else '' }}"></i>
+                                </button>
+                            </form>
+
+                            <!-- Удалить -->
+                            <form method="post" action="{{ url_for('admin_delete_user', user_id=u.id) }}"
+                                  onsubmit="return confirm('Удалить пользователя {{ u.username }}?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- Модалка смены пароля -->
+                <div class="modal fade" id="pwdModal{{ u.id }}" tabindex="-1">
+                    <div class="modal-dialog modal-sm">
+                        <div class="modal-content border-0 shadow">
+                            <div class="modal-header border-0 pb-0">
+                                <h6 class="modal-title">Новый пароль для <strong>{{ u.username }}</strong></h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="post" action="{{ url_for('admin_change_password', user_id=u.id) }}">
+                                <div class="modal-body">
+                                    <input type="password" name="password" class="form-control"
+                                           placeholder="Минимум 4 символа" required minlength="4" autofocus>
+                                </div>
+                                <div class="modal-footer border-0 pt-0">
+                                    <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Отмена</button>
+                                    <button type="submit" class="btn btn-primary btn-sm">Сохранить</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модалка добавления -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title">Новый пользователь</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('admin_add_user') }}">
+                <div class="modal-body row g-3">
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-600">ЛОГИН</label>
+                        <input type="text" name="username" class="form-control" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-600">ИМЯ</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-muted small fw-600">ПАРОЛЬ</label>
+                        <input type="password" name="password" class="form-control" required minlength="4">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_admin" id="is_admin" class="form-check-input" value="1">
+                            <label for="is_admin" class="form-check-label">Права администратора</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

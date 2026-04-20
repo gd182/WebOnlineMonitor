@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Дашборд — WebOnlineMonitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-grid-1x2-fill me-2 text-primary"></i>Дашборд</h1>
+</div>
+
+<!-- Счётчики -->
+<div class="row g-3 mb-4">
+    {% for label, value, icon, color in [
+        ('Сегодня',   today_count,  'bi-sun',        'warning'),
+        ('За неделю', week_count,   'bi-calendar-week', 'primary'),
+        ('За месяц',  month_count,  'bi-calendar-month','success'),
+        ('Всего',     total_count,  'bi-database',    'secondary'),
+    ] %}
+    <div class="col-6 col-lg-3">
+        <div class="stat-card">
+            <div class="icon bg-{{ color }} bg-opacity-10 text-{{ color }}">
+                <i class="bi {{ icon }}"></i>
+            </div>
+            <div>
+                <div class="value text-{{ color }}">{{ value }}</div>
+                <div class="label">{{ label }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Графики: активность по дням + по часам -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header py-3">
+                <i class="bi bi-bar-chart-line me-2 text-primary"></i>Активность за последние 30 дней
+            </div>
+            <div class="card-body">
+                <canvas id="daysChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header py-3">
+                <i class="bi bi-pie-chart me-2 text-primary"></i>Платформы
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center">
+                {% if plat_data %}
+                <canvas id="platChart" style="max-height:220px"></canvas>
+                {% else %}
+                <div class="text-muted text-center">
+                    <i class="bi bi-bar-chart fs-2 d-block mb-2"></i>Нет данных
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- По часам + по дням недели -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header py-3">
+                <i class="bi bi-clock me-2 text-primary"></i>Активность по часам суток
+            </div>
+            <div class="card-body">
+                <canvas id="hourChart" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header py-3">
+                <i class="bi bi-calendar3-week me-2 text-primary"></i>По дням недели
+            </div>
+            <div class="card-body">
+                <canvas id="dowChart" height="160"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Топ пользователей -->
+<div class="card">
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-trophy me-2 text-warning"></i>Топ пользователей по активности</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Пользователь</th>
+                    <th>Событий</th>
+                    <th>Последний онлайн</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in top_users %}
+                <tr>
+                    <td class="text-muted fw-600">{{ loop.index }}</td>
+                    <td>
+                        <div class="fw-500">{{ u.last_name }} {{ u.first_name }}</div>
+                        <div class="text-muted small">#{{ u.vk_id }}</div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-fill" style="height:6px;min-width:80px">
+                                <div class="progress-bar bg-primary" style="width:{{ (u.cnt / top_users[0].cnt * 100)|int }}%"></div>
+                            </div>
+                            <span class="text-muted small">{{ u.cnt }}</span>
+                        </div>
+                    </td>
+                    <td class="text-muted small">
+                        {{ u.last_seen.strftime('%d.%m.%Y %H:%M') if u.last_seen else '—' }}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('user_detail', vk_id=u.vk_id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-graph-up"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const BLUE   = 'rgba(74,144,217,0.85)';
+const BLUE_L = 'rgba(74,144,217,0.15)';
+const gridColor = 'rgba(0,0,0,0.05)';
+
+Chart.defaults.font.family = "'Segoe UI', sans-serif";
+Chart.defaults.font.size = 12;
+
+// Активность по дням
+new Chart(document.getElementById('daysChart'), {
+    type: 'line',
+    data: {
+        labels: {{ days_labels | tojson }},
+        datasets: [{
+            label: 'Событий',
+            data: {{ days_data | tojson }},
+            borderColor: BLUE, backgroundColor: BLUE_L,
+            fill: true, tension: 0.4, pointRadius: 3,
+        }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } } }
+});
+
+// По часам
+new Chart(document.getElementById('hourChart'), {
+    type: 'bar',
+    data: {
+        labels: Array.from({length:24}, (_,i) => i + ':00'),
+        datasets: [{
+            label: 'Событий',
+            data: {{ by_hour | tojson }},
+            backgroundColor: BLUE, borderRadius: 4,
+        }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } } }
+});
+
+// Платформы
+{% if plat_data %}
+new Chart(document.getElementById('platChart'), {
+    type: 'doughnut',
+    data: {
+        labels: {{ plat_labels | tojson }},
+        datasets: [{
+            data: {{ plat_data | tojson }},
+            backgroundColor: ['#4a90d9','#34c98f','#f5a623','#e74c3c','#9b59b6','#1abc9c'],
+            borderWidth: 2, borderColor: '#fff',
+        }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { padding: 15, boxWidth: 12 } } }, cutout: '60%' }
+});
+{% endif %}
+
+// По дням недели
+new Chart(document.getElementById('dowChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ dow_labels | tojson }},
+        datasets: [{
+            data: {{ dow_data | tojson }},
+            backgroundColor: BLUE, borderRadius: 4,
+        }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, grid: { color: gridColor } }, y: { grid: { display: false } } } }
+});
+</script>
+{% endblock %}
